@@ -1,44 +1,80 @@
+// 封装axios的请求，返回重新封装的数据格式
+// 对错误的统一处理
 import axios from "axios"
 import errorHandle from "./errorHandle"
 
-const instance = axios.create({
-  baseURL:
-    process.env.NODE_ENV === "development"
-      ? "http://localhost:3000"
-      : "http://your.domain.com",
-  headers: {
-    "Content-Type": "application/json;charset=utf-8",
-  },
-  timeout: 10000,
-})
-
-instance.interceptors.request.use(
-  (config) => {
-    console.log("配置:", config)
-    //需要返回config，配置才能生效
-    return config
-  },
-  (error) => {
-    // 因为请求、响应拦截器中都要对错误进行处理，因此我们可以封装错误处理函数，在该模块中进行调用
-    errorHandle(error)
-    //Promise.reject(error)是Promise的静态方法，相当于new Promise((resolve, reject) => { reject("error") })
-    return Promise.reject(error)
+// 封装axios请求类（axios实例的模板）
+class HttpRequest {
+  constructor(baseUrl) {
+    this.baseUrl = baseUrl
   }
-)
-
-instance.interceptors.response.use(
-  (res) => {
-    if (res.status === 200) {
-      return res.data
-    } else {
-      return Promise.reject(res)
+  // 获取axios配置
+  getInsideConfig() {
+    const config = {
+      baseURL: this.baseUrl,
+      headers: {
+        "Content-Type": "application/json;charset=utf-8",
+      },
+      timeout: 10000,
     }
-  },
-  (error) => {
-    debugger
-    errorHandle(error)
-    return Promise.reject(error)
+    return config
   }
-)
+  // 设定拦截器
+  interceptors(instance) {
+    // 请求拦截器
+    instance.interceptors.request.use(
+      (config) => {
+        return config
+      },
+      (err) => {
+        errorHandle(err)
+        return Promise.reject(err)
+      }
+    )
 
-export default instance
+    // 响应请求的拦截器
+    instance.interceptors.response.use(
+      (res) => {
+        if (res.status === 200) {
+          return Promise.resolve(res.data)
+        } else {
+          return Promise.reject(res)
+        }
+      },
+      (err) => {
+        errorHandle(err)
+        return Promise.reject(err)
+      }
+    )
+  }
+  // 创建实例
+  request(options) {
+    const instance = axios.create()
+    // Object.assign(target, resource)对对象进行浅拷贝，将resource对象中的属性拷贝到target中（属性冲突时，target的属性值将被覆盖）
+    // 这里给axios实例拷贝了类中的通用config，同时设置了每个请求中不同的配置，如method、url、body等
+    const newOptions = Object.assign(this.getInsideConfig(), options)
+    // 绑定拦截器
+    this.interceptors(instance)
+    return instance(newOptions)
+  }
+  // 常见的get、post请求
+  get(url, config) {
+    const options = Object.assign(
+      {
+        method: "get",
+        url: url,
+      },
+      config
+    )
+    return this.request(options)
+  }
+  post(url, data) {
+    return this.request({
+      method: "post",
+      url: url,
+      data: data,
+    })
+  }
+}
+
+export default HttpRequest
