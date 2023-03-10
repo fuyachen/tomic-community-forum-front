@@ -105,6 +105,7 @@
 <script>
 import { ValidationProvider } from "vee-validate"
 import getCode from "../api/login"
+import { v4 as uuidv4 } from "uuid"
 
 export default {
   data() {
@@ -121,13 +122,26 @@ export default {
   },
 
   mounted() {
+    //声明验证码对应的标识符sid
+    let sid
+    if (localStorage.getItem(sid)) {
+      //浏览器本地有没有存储sid
+      sid = localStorage.getItem(sid)
+    } else {
+      sid = uuidv4() //使用uuid生成随机标识符
+      localStorage.setItem("sid", sid) //setItem(key, value)
+    }
+    // 为了其他组件也能使用sid，用vuex进行数据管理
+    this.$store.commit("setSid", sid)
+
     // 页面加载完成就会显示验证码
     this._getCode()
   },
 
   methods: {
     _getCode() {
-      getCode().then((res) => {
+      let sid = this.$store.state.sid
+      getCode(sid).then((res) => {
         if (res.code === 200) {
           this.svg = res.data
         }
